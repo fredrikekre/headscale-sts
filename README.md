@@ -161,5 +161,13 @@ go build .
 go test ./...
 ```
 
+Pushing a `v*` tag builds static linux amd64/arm64 binaries (stamped with
+the version, see `headscale-sts -version`) and publishes them with a
+SHA256SUMS file as a GitHub release:
+
+```sh
+git tag v0.1.0 && git push origin v0.1.0
+```
+
 Tests run fully offline; OIDC verification is tested against a fake issuer
 served from `httptest`.
