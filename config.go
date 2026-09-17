@@ -97,7 +97,10 @@ func LoadConfig(path string) (*Config, error) {
 		return nil, err
 	}
 	if cfg.Headscale.APIKeyFile != "" {
-		key, err := os.ReadFile(cfg.Headscale.APIKeyFile)
+		// Environment variables are expanded so that the config can refer
+		// to e.g. ${CREDENTIALS_DIRECTORY}/apikey when the key is passed
+		// with systemd's LoadCredential=.
+		key, err := os.ReadFile(os.ExpandEnv(cfg.Headscale.APIKeyFile))
 		if err != nil {
 			return nil, fmt.Errorf("reading api_key_file: %w", err)
 		}

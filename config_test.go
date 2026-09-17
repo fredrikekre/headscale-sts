@@ -107,6 +107,37 @@ trusts:
 	}
 }
 
+// api_key_file supports env expansion, e.g. systemd's $CREDENTIALS_DIRECTORY.
+func TestLoadConfigAPIKeyFileEnvExpansion(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "apikey"), []byte("envkey"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CREDENTIALS_DIRECTORY", dir)
+	configfile := filepath.Join(dir, "config.yaml")
+	config := `
+headscale:
+  url: http://127.0.0.1:8080
+  api_key_file: ${CREDENTIALS_DIRECTORY}/apikey
+trusts:
+  - issuer: https://issuer.example.org
+    audience: aud
+    rules:
+      - match: {repository: Org/Repo}
+        tags: [tag:ci]
+`
+	if err := os.WriteFile(configfile, []byte(config), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadConfig(configfile)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.Headscale.APIKey != "envkey" {
+		t.Errorf("APIKey = %q", cfg.Headscale.APIKey)
+	}
+}
+
 // The example config in the repository must always be valid.
 func TestExampleConfig(t *testing.T) {
 	data, err := os.ReadFile("config.example.yaml")

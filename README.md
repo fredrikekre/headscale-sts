@@ -126,8 +126,17 @@ Restart=on-failure
 WantedBy=multi-user.target
 ```
 
-(With `LoadCredential`, point `api_key_file` at
-`%d/apikey` i.e. `/run/credentials/headscale-sts.service/apikey`.)
+With `LoadCredential=`, systemd exposes the key at
+`$CREDENTIALS_DIRECTORY/apikey` and `api_key_file` supports environment
+variable expansion, so the config becomes:
+
+```yaml
+headscale:
+  api_key_file: ${CREDENTIALS_DIRECTORY}/apikey
+```
+
+(Note that `%d` is a systemd unit-file specifier and cannot be used inside
+config.yaml.)
 
 ## Build and test
 
