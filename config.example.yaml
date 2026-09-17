@@ -15,6 +15,11 @@ headscale:
   api_key_file: "/etc/headscale-sts/apikey"
 
 trusts:
+  # GitHub Actions jobs (with `permissions: id-token: write`) request a
+  # token with e.g.
+  #   curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+  #     "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://headscale.julialang.org/sts"
+  # (the token is in the .value field of the response)
   - issuer: https://token.actions.githubusercontent.com
     # The audience the workload must request; convention is the public URL
     # of this service.
