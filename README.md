@@ -98,10 +98,11 @@ steps:
 Run on the headscale host so that the headscale API can stay bound to
 localhost and the API key never leaves the machine.
 
-The [Makefile](Makefile) deploys everything:
+The [Makefile](Makefile) deploys everything (privileged commands run with
+sudo unless make is invoked as root):
 
 ```sh
-sudo make install VERSION=v0.1.0
+make install VERSION=v0.1.0
 ```
 
 which, via individual file targets:
@@ -124,7 +125,7 @@ which, via individual file targets:
 The apikey target never overwrites an existing file, so `make install` is
 safe to re-run (e.g. to upgrade the binary with a new `VERSION=`, or to push
 a config change; follow with `make restart`). To rotate the API key:
-`rm /etc/headscale-sts/apikey && make install restart`. If the key ever
+`sudo rm /etc/headscale-sts/apikey && make install restart`. If the key ever
 expires (or is expired manually with `headscale apikeys expire`),
 headscale-sts starts responding 502 and the same rotation fixes it — the
 key is read at service startup only.
