@@ -33,6 +33,12 @@ func buildVersion() string {
 }
 
 func main() {
+	// systemd sets $JOURNAL_STREAM when stderr goes to the journal, which
+	// timestamps entries itself; drop the duplicate log package timestamps.
+	if os.Getenv("JOURNAL_STREAM") != "" {
+		log.SetFlags(0)
+	}
+
 	configPath := flag.String("config", "/etc/headscale-sts/config.yaml", "path to the configuration file")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
