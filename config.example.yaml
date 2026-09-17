@@ -31,3 +31,14 @@ trusts:
           ephemeral: true
           reusable: false
           expiry: 5m
+
+  # Buildkite agents request a token with e.g.
+  #   buildkite-agent oidc request-token --audience https://headscale.julialang.org/sts
+  - issuer: https://agent.buildkite.com
+    audience: https://headscale.julialang.org/sts
+    rules:
+      - match:
+          organization_slug: julialang
+          pipeline_slug: example-pipeline
+          build_branch: main
+        tags: [tag:buildkite-ci]
