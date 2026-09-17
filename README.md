@@ -96,8 +96,24 @@ steps:
 ## Deployment
 
 Run on the headscale host so that the headscale API can stay bound to
-localhost and the API key never leaves the machine. Front it with the
-existing reverse proxy, e.g. (nginx):
+localhost and the API key never leaves the machine.
+
+Generate the headscale API key and write it to the key file (the key is
+printed once at creation and stored hashed by headscale, so this is the only
+chance to capture it):
+
+```sh
+headscale apikeys create --expiration 3650d \
+    | sudo tee /etc/headscale-sts/apikey > /dev/null
+sudo chmod 600 /etc/headscale-sts/apikey
+```
+
+If it ever expires (or is expired manually with `headscale apikeys expire`),
+headscale-sts starts responding 502; the fix is to repeat the two commands
+above and `systemctl restart headscale-sts` (the key is read at startup
+only).
+
+Front the service with the existing reverse proxy, e.g. (nginx):
 
 ```nginx
 location /sts/ {
