@@ -81,8 +81,8 @@ steps:
     id: mint
     run: |
       OIDC=$(curl -sf -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-        "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://headscale.julialang.org/sts" | jq -r .value)
-      KEY=$(curl -sf -X POST https://headscale.julialang.org/sts/authkey \
+        "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://headscale.example.org/sts" | jq -r .value)
+      KEY=$(curl -sf -X POST https://headscale.example.org/sts/authkey \
         -H "Authorization: Bearer $OIDC")
       echo "::add-mask::$KEY"
       echo "authkey=$KEY" >> "$GITHUB_OUTPUT"
@@ -90,7 +90,7 @@ steps:
   - uses: tailscale/github-action@<pinned>
     with:
       authkey: ${{ steps.mint.outputs.authkey }}
-      args: --login-server=https://headscale.julialang.org
+      args: --login-server=https://headscale.example.org
 ```
 
 ## Deployment

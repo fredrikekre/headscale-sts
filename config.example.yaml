@@ -20,19 +20,19 @@ trusts:
   # GitHub Actions jobs (with `permissions: id-token: write`) request a
   # token with e.g.
   #   curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-  #     "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://headscale.julialang.org/sts"
+  #     "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://headscale.example.org/sts"
   # (the token is in the .value field of the response)
   - issuer: https://token.actions.githubusercontent.com
     # The audience the workload must request; convention is the public URL
     # of this service.
-    audience: https://headscale.julialang.org/sts
+    audience: https://headscale.example.org/sts
     rules:
       # First matching rule wins. All claims in `match` must equal the
       # token's claims (scalar claims only).
       - match:
-          repository: JuliaPackaging/PkgServerLogAnalysis.jl
-          ref: refs/heads/master
-        tags: [tag:logsync]
+          repository: fredrikekre/headscale-sts
+          ref: refs/heads/main
+        tags: [tag:ci]
         # Optional; the defaults are as follows.
         key:
           ephemeral: true
@@ -40,12 +40,12 @@ trusts:
           expiry: 5m
 
   # Buildkite agents request a token with e.g.
-  #   buildkite-agent oidc request-token --audience https://headscale.julialang.org/sts
+  #   buildkite-agent oidc request-token --audience https://headscale.example.org/sts
   - issuer: https://agent.buildkite.com
-    audience: https://headscale.julialang.org/sts
+    audience: https://headscale.example.org/sts
     rules:
       - match:
-          organization_slug: julialang
+          organization_slug: example-org
           pipeline_slug: example-pipeline
           build_branch: main
         tags: [tag:buildkite-ci]
