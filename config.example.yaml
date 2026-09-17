@@ -1,0 +1,33 @@
+# headscale-sts configuration
+#
+# The service listens on `listen` (keep it on localhost and front it with the
+# reverse proxy that serves headscale) and mints preauth keys via the
+# headscale API for workloads whose OIDC tokens match a rule.
+
+listen: "127.0.0.1:8470"
+
+headscale:
+  # The headscale API; localhost when running on the headscale host.
+  url: "http://127.0.0.1:8080"
+  # API key from `headscale apikeys create`. Exactly one of api_key and
+  # api_key_file must be set; prefer the file so that the key is not in the
+  # config.
+  api_key_file: "/etc/headscale-sts/apikey"
+
+trusts:
+  - issuer: https://token.actions.githubusercontent.com
+    # The audience the workload must request; convention is the public URL
+    # of this service.
+    audience: https://headscale.julialang.org/sts
+    rules:
+      # First matching rule wins. All claims in `match` must equal the
+      # token's claims (scalar claims only).
+      - match:
+          repository: JuliaPackaging/PkgServerLogAnalysis.jl
+          ref: refs/heads/master
+        tags: [tag:logsync]
+        # Optional; the defaults are as follows.
+        key:
+          ephemeral: true
+          reusable: false
+          expiry: 5m
