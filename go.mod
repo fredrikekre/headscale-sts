@@ -1,4 +1,4 @@
-module headscale-sts
+module github.com/fredrikekre/headscale-sts
 
 go 1.25.0
 

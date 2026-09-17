@@ -161,6 +161,12 @@ go build .
 go test ./...
 ```
 
+or install directly:
+
+```sh
+go install github.com/fredrikekre/headscale-sts@latest
+```
+
 Pushing a `v*` tag builds static linux amd64/arm64 binaries (stamped with
 the version, see `headscale-sts -version`) and publishes them with a
 SHA256SUMS file as a GitHub release:
