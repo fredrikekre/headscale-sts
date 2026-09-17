@@ -12,18 +12,32 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"runtime/debug"
 	"time"
 )
 
-// version is stamped at build time with -ldflags "-X main.version=...".
+// version is stamped at build time with -ldflags "-X main.version=..." (the
+// release builds do this); for binaries built from a module version without
+// it, e.g. via `go install ...@v1.2.3`, the version embedded in the build
+// info is used instead.
 var version = "dev"
+
+func buildVersion() string {
+	if version != "dev" {
+		return version
+	}
+	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" && info.Main.Version != "(devel)" {
+		return info.Main.Version
+	}
+	return version
+}
 
 func main() {
 	configPath := flag.String("config", "/etc/headscale-sts/config.yaml", "path to the configuration file")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
 	if *showVersion {
-		fmt.Println(version)
+		fmt.Println(buildVersion())
 		os.Exit(0)
 	}
 
@@ -40,6 +54,6 @@ func main() {
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      30 * time.Second,
 	}
-	log.Printf("headscale-sts %s listening on %s (%d trust(s) configured)", version, cfg.Listen, len(cfg.Trusts))
+	log.Printf("headscale-sts %s listening on %s (%d trust(s) configured)", buildVersion(), cfg.Listen, len(cfg.Trusts))
 	log.Fatal(httpServer.ListenAndServe())
 }
