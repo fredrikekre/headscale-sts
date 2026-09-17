@@ -11,10 +11,18 @@ expiry, tagged) is returned. No long-lived credential needs to be stored
 with the workload platform.
 
 ```
-             OIDC token                 POST /sts/authkey
-GitHub Actions ────────► headscale-sts ──────────────────► headscale API
-     ▲                        │  verify iss/aud/exp/sig       │
-     └────── preauth key ─────┘  match claims to rules ◄──────┘
+GitHub Actions              headscale-sts                headscale
+      │  POST /sts/authkey        │                          │
+      │  (Bearer: OIDC token)     │                          │
+      ├─────────────────────────► │                          │
+      │                          verify                      │
+      │                 iss/aud/exp/signature,               │
+      │                match claims against rules            │
+      │                           │                          │
+      │                           │  POST /api/v1/preauthkey │
+      │                           ├────────────────────────► │
+      │                           │ ◄──────── preauth key ───┤
+      │ ◄────── preauth key ──────┤                          │
 ```
 
 See also [headscale#3303](https://github.com/juanfont/headscale/issues/3303)
