@@ -11,8 +11,10 @@ headscale:
   url: "http://127.0.0.1:8080"
   # API key from `headscale apikeys create`. Exactly one of api_key and
   # api_key_file must be set; prefer the file so that the key is not in the
-  # config.
-  api_key_file: "/etc/headscale-sts/apikey"
+  # config. Environment variables are expanded: with the bundled systemd
+  # unit (DynamicUser + LoadCredential) the key from /etc/headscale-sts/apikey
+  # is exposed to the service under $CREDENTIALS_DIRECTORY.
+  api_key_file: "${CREDENTIALS_DIRECTORY}/apikey"
 
 trusts:
   # GitHub Actions jobs (with `permissions: id-token: write`) request a

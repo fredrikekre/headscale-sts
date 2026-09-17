@@ -1,0 +1,16 @@
+[Unit]
+Description=headscale-sts
+After=network-online.target headscale.service
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/headscale-sts --config /etc/headscale-sts/config.yaml
+DynamicUser=yes
+LoadCredential=apikey:/etc/headscale-sts/apikey
+ProtectSystem=strict
+ProtectHome=yes
+NoNewPrivileges=yes
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

@@ -1,1 +1,4 @@
 /headscale-sts
+/headscale-sts-v*-linux-*
+/SHA256SUMS-v*
+/config.yaml

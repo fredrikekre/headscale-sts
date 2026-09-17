@@ -98,20 +98,36 @@ steps:
 Run on the headscale host so that the headscale API can stay bound to
 localhost and the API key never leaves the machine.
 
-Generate the headscale API key and write it to the key file (the key is
-printed once at creation and stored hashed by headscale, so this is the only
-chance to capture it):
+The [Makefile](Makefile) deploys everything:
 
 ```sh
-headscale apikeys create --expiration 3650d \
-    | sudo tee /etc/headscale-sts/apikey > /dev/null
-sudo chmod 600 /etc/headscale-sts/apikey
+sudo make install VERSION=v0.1.0
 ```
 
-If it ever expires (or is expired manually with `headscale apikeys expire`),
-headscale-sts starts responding 502; the fix is to repeat the two commands
-above and `systemctl restart headscale-sts` (the key is read at startup
-only).
+which, via individual file targets:
+
+- downloads the release binary for the host architecture, verifies it
+  against `SHA256SUMS` and installs it as `/usr/local/bin/headscale-sts`
+- installs [headscale-sts.service](headscale-sts.service) (a hardened unit:
+  `DynamicUser` and the API key passed via `LoadCredential=`, exposed to the
+  service under `$CREDENTIALS_DIRECTORY` which the example config refers to)
+- installs a locally created (gitignored) `config.yaml` — start from
+  [config.example.yaml](config.example.yaml) — as
+  `/etc/headscale-sts/config.yaml` (0644), re-installing it whenever the
+  local file changes
+- generates the headscale API key with
+  `headscale apikeys create --expiration 3650d` into
+  `/etc/headscale-sts/apikey` (0600) if missing (the key is printed once at
+  creation and stored hashed by headscale, so it can never be re-read later)
+- enables and starts the service
+
+The apikey target never overwrites an existing file, so `make install` is
+safe to re-run (e.g. to upgrade the binary with a new `VERSION=`, or to push
+a config change; follow with `make restart`). To rotate the API key:
+`rm /etc/headscale-sts/apikey && make install restart`. If the key ever
+expires (or is expired manually with `headscale apikeys expire`),
+headscale-sts starts responding 502 and the same rotation fixes it — the
+key is read at service startup only.
 
 Front the service with the existing reverse proxy, e.g. (nginx):
 
@@ -120,39 +136,6 @@ location /sts/ {
     proxy_pass http://127.0.0.1:8470;
 }
 ```
-
-Example systemd unit:
-
-```ini
-[Unit]
-Description=headscale-sts
-After=network-online.target headscale.service
-Wants=network-online.target
-
-[Service]
-ExecStart=/usr/local/bin/headscale-sts --config /etc/headscale-sts/config.yaml
-DynamicUser=yes
-LoadCredential=apikey:/etc/headscale-sts/apikey
-ProtectSystem=strict
-ProtectHome=yes
-NoNewPrivileges=yes
-Restart=on-failure
-
-[Install]
-WantedBy=multi-user.target
-```
-
-With `LoadCredential=`, systemd exposes the key at
-`$CREDENTIALS_DIRECTORY/apikey` and `api_key_file` supports environment
-variable expansion, so the config becomes:
-
-```yaml
-headscale:
-  api_key_file: ${CREDENTIALS_DIRECTORY}/apikey
-```
-
-(Note that `%d` is a systemd unit-file specifier and cannot be used inside
-config.yaml.)
 
 ## Build and test
 
