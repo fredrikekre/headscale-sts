@@ -200,18 +200,32 @@ func TestClaimStringScalars(t *testing.T) {
 		want string
 	}{
 		{"str", "str"},
+		{"", ""},
 		{true, "true"},
+		{false, "false"},
 		{float64(42), "42"},
 		{float64(1.5), "1.5"},
 		{json.Number("7"), "7"},
-		{[]any{"a"}, ""},       // arrays never match
-		{map[string]any{}, ""}, // objects never match
-		{nil, ""},              // null never matches
 	}
 	for _, tc := range cases {
-		if got := claimString(tc.in); got != tc.want {
-			t.Errorf("claimString(%v) = %q, want %q", tc.in, got, tc.want)
+		if got, ok := claimString(tc.in); !ok || got != tc.want {
+			t.Errorf("claimString(%v) = (%q, %t), want (%q, true)", tc.in, got, ok, tc.want)
 		}
+	}
+}
+
+func TestRuleRejectsNonScalarClaims(t *testing.T) {
+	rule := &Rule{Match: map[string]string{"claim": ""}}
+	for _, value := range []any{nil, []any{}, []any{"x"}, map[string]any{}, map[string]any{"x": "y"}} {
+		if ruleMatches(rule, map[string]any{"claim": value}) {
+			t.Errorf("non-scalar %#v matched empty string", value)
+		}
+	}
+	if ruleMatches(rule, map[string]any{}) {
+		t.Error("missing claim matched empty string")
+	}
+	if !ruleMatches(rule, map[string]any{"claim": ""}) {
+		t.Error("empty string claim did not match")
 	}
 }
 

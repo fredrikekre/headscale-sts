@@ -162,7 +162,7 @@ func ruleMatches(rule *Rule, claims map[string]any) bool {
 		if !ok {
 			return false
 		}
-		if claimString(got) != want {
+		if value, scalar := claimString(got); !scalar || value != want {
 			return false
 		}
 	}
@@ -171,21 +171,21 @@ func ruleMatches(rule *Rule, claims map[string]any) bool {
 
 // claimString renders a scalar claim value for comparison. Non-scalar
 // claims (arrays, objects) never match.
-func claimString(v any) string {
+func claimString(v any) (string, bool) {
 	switch val := v.(type) {
 	case string:
-		return val
+		return val, true
 	case bool:
-		return fmt.Sprintf("%t", val)
+		return fmt.Sprintf("%t", val), true
 	case float64:
 		// JSON numbers; render integers without decimals.
 		if val == float64(int64(val)) {
-			return fmt.Sprintf("%d", int64(val))
+			return fmt.Sprintf("%d", int64(val)), true
 		}
-		return fmt.Sprintf("%v", val)
+		return fmt.Sprintf("%v", val), true
 	case json.Number:
-		return val.String()
+		return val.String(), true
 	default:
-		return ""
+		return "", false
 	}
 }
