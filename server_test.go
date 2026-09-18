@@ -198,3 +198,52 @@ func TestHeadscaleClientErrors(t *testing.T) {
 		}
 	})
 }
+
+func TestHandlerMultipleTrusts(t *testing.T) {
+	issuer := newFakeIssuer(t)
+	other := newFakeIssuer(t)
+	rule := func(repo, tag string) []Rule {
+		return []Rule{{Match: map[string]string{"repository": repo}, Tags: []string{tag}}}
+	}
+	trusts := []Trust{
+		{Issuer: issuer.server.URL, Audience: "aud", Rules: rule("First/Repo", "tag:first")},
+		{Issuer: issuer.server.URL, Audience: "aud", Rules: rule("Org/Repo", "tag:second")},
+		{Issuer: issuer.server.URL, Audience: "other-aud", Rules: rule("Other/Repo", "tag:other")},
+		{Issuer: other.server.URL, Audience: "aud", Rules: rule("Foreign/Repo", "tag:foreign")},
+		{Issuer: issuer.server.URL, Audience: "aud", Rules: rule("Org/Repo", "tag:shadowed")},
+	}
+	verifier := NewOIDCVerifier(trusts)
+	cases := []struct {
+		name, repo string
+		audience   any
+		status     int
+		tag        string
+	}{
+		{"first trust", "First/Repo", "aud", http.StatusOK, "tag:first"},
+		{"later trust and first matching rule wins", "Org/Repo", "aud", http.StatusOK, "tag:second"},
+		{"later audience", "Other/Repo", "other-aud", http.StatusOK, "tag:other"},
+		{"multiple audiences", "Other/Repo", []string{"aud", "other-aud"}, http.StatusOK, "tag:other"},
+		{"no rule", "Unknown/Repo", "aud", http.StatusForbidden, ""},
+		{"wrong audience cannot authorize", "Other/Repo", "aud", http.StatusForbidden, ""},
+		{"wrong issuer cannot authorize", "Foreign/Repo", "aud", http.StatusForbidden, ""},
+		{"no verified trust", "Org/Repo", "invalid", http.StatusUnauthorized, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			hs := &fakeHeadscale{key: "key"}
+			srv := NewServer(verifier, hs)
+			token := issuer.sign(t, map[string]any{"aud": tc.audience, "repository": tc.repo})
+			w := request(t, srv, http.MethodPost, "/authkey", token)
+			if w.Code != tc.status {
+				t.Fatalf("status = %d, want %d: %s", w.Code, tc.status, w.Body)
+			}
+			if tc.tag == "" {
+				if len(hs.tags) != 0 {
+					t.Fatalf("unexpected key minted: %v", hs.tags)
+				}
+			} else if len(hs.tags) != 1 || hs.tags[0] != tc.tag {
+				t.Fatalf("tags = %v, want %s", hs.tags, tc.tag)
+			}
+		})
+	}
+}

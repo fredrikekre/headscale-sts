@@ -61,6 +61,10 @@ which claims to pin in `match`:
 | GitLab | `project_path`, `ref` |
 | Kubernetes | `sub` (`system:serviceaccount:<ns>:<name>`) |
 
+Trusts and their rules are evaluated in configuration order; the first matching
+rule from a trust that verifies the token wins. A verified token with no matching
+rule receives 403, even if verification against other trusts fails.
+
 Only scalar claims can be matched (arrays and objects never match). Note
 that on GitHub the `sub` format is repo-customizable; prefer explicit claims
 like `repository` and `ref`.

@@ -15,7 +15,8 @@ import (
 )
 
 // TokenVerifier verifies a raw bearer token against the configured trusts
-// and returns the token claims together with the trust that verified it.
+// and returns the first verified trust with a matching rule. If no rule
+// matches, it returns the first verified trust so the handler can return 403.
 type TokenVerifier interface {
 	Verify(ctx context.Context, rawToken string) (map[string]any, *Trust, error)
 }
@@ -116,6 +117,8 @@ func (v *oidcVerifier) Verify(ctx context.Context, rawToken string) (map[string]
 		return nil, nil, err
 	}
 	var errs []error
+	var firstClaims map[string]any
+	var firstTrust *Trust
 	for i := range v.trusts {
 		trust := &v.trusts[i]
 		if trust.Issuer != issuer {
@@ -136,7 +139,15 @@ func (v *oidcVerifier) Verify(ctx context.Context, rawToken string) (map[string]
 		if err := idToken.Claims(&claims); err != nil {
 			return nil, nil, fmt.Errorf("decoding claims: %w", err)
 		}
-		return claims, trust, nil
+		if matchRule(trust.Rules, claims) != nil {
+			return claims, trust, nil
+		}
+		if firstTrust == nil {
+			firstClaims, firstTrust = claims, trust
+		}
+	}
+	if firstTrust != nil {
+		return firstClaims, firstTrust, nil
 	}
 	if len(errs) > 0 {
 		return nil, nil, errors.Join(errs...)
