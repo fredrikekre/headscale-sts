@@ -27,13 +27,13 @@ type oidcVerifier struct {
 	trusts []Trust
 
 	mu        sync.Mutex
-	providers map[string]*oidc.Provider
+	providers map[string]*providerEntry
 }
 
 func NewOIDCVerifier(trusts []Trust) TokenVerifier {
 	return &oidcVerifier{
 		trusts:    trusts,
-		providers: make(map[string]*oidc.Provider),
+		providers: make(map[string]*providerEntry),
 	}
 }
 
@@ -61,22 +61,53 @@ func unverifiedIssuer(rawToken string) (string, error) {
 	return claims.Issuer, nil
 }
 
+// A closed done channel publishes the discovery result to all waiters.
+type providerEntry struct {
+	done       chan struct{}
+	provider   *oidc.Provider
+	err        error
+	retryAfter time.Time
+}
+
+const discoveryRetryDelay = 10 * time.Second
+
 func (v *oidcVerifier) provider(ctx context.Context, issuer string) (*oidc.Provider, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	v.mu.Lock()
-	defer v.mu.Unlock()
-	if p, ok := v.providers[issuer]; ok {
-		return p, nil
+	entry := v.providers[issuer]
+	if entry != nil {
+		select {
+		case <-entry.done:
+			if entry.err != nil && !time.Now().Before(entry.retryAfter) {
+				entry = nil
+			}
+		default:
+		}
 	}
-	// The provider (and its remote key set) keeps using this context's
-	// client for later JWKS refreshes, so use a long-lived context with a
-	// timeout-limited client rather than the request context.
-	pctx := oidc.ClientContext(context.Background(), &http.Client{Timeout: 10 * time.Second})
-	p, err := oidc.NewProvider(pctx, issuer)
-	if err != nil {
-		return nil, fmt.Errorf("OIDC discovery for %s: %w", issuer, err)
+	if entry == nil {
+		entry = &providerEntry{done: make(chan struct{})}
+		v.providers[issuer] = entry
+		go func() {
+			// Discovery and subsequent JWKS refreshes share a long-lived context
+			// with a bounded HTTP client, independent of any one caller.
+			pctx := oidc.ClientContext(context.Background(), &http.Client{Timeout: 10 * time.Second})
+			entry.provider, entry.err = oidc.NewProvider(pctx, issuer)
+			if entry.err != nil {
+				entry.err = fmt.Errorf("OIDC discovery for %s: %w", issuer, entry.err)
+				entry.retryAfter = time.Now().Add(discoveryRetryDelay)
+			}
+			close(entry.done)
+		}()
 	}
-	v.providers[issuer] = p
-	return p, nil
+	v.mu.Unlock()
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-entry.done:
+		return entry.provider, entry.err
+	}
 }
 
 func (v *oidcVerifier) Verify(ctx context.Context, rawToken string) (map[string]any, *Trust, error) {

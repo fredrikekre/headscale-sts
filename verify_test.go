@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -228,5 +229,71 @@ func TestUnverifiedIssuer(t *testing.T) {
 		if _, err := unverifiedIssuer(bad); err == nil {
 			t.Errorf("unverifiedIssuer(%q): expected error", bad)
 		}
+	}
+}
+
+func TestDiscoveryIsolationAndCancellation(t *testing.T) {
+	started, release := make(chan struct{}), make(chan struct{})
+	slow := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		close(started)
+		<-release
+		http.Error(w, "unavailable", http.StatusServiceUnavailable)
+	}))
+	defer slow.Close()
+	defer close(release)
+	good := newFakeIssuer(t)
+	v := NewOIDCVerifier(nil).(*oidcVerifier)
+	if _, err := v.provider(context.Background(), good.server.URL); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { _, err := v.provider(ctx, slow.URL); done <- err }()
+	<-started
+	cancel()
+	select {
+	case err := <-done:
+		if err != context.Canceled {
+			t.Fatalf("canceled discovery waiter: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("discovery waiter ignored cancellation")
+	}
+	healthyCtx, stop := context.WithTimeout(context.Background(), time.Second)
+	defer stop()
+	if _, err := v.provider(healthyCtx, good.server.URL); err != nil {
+		t.Fatalf("cached issuer blocked: %v", err)
+	}
+	other := newFakeIssuer(t)
+	if _, err := v.provider(healthyCtx, other.server.URL); err != nil {
+		t.Fatalf("new issuer blocked: %v", err)
+	}
+}
+
+func TestDiscoveryFailureBackoff(t *testing.T) {
+	var calls atomic.Int32
+	issuer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		http.Error(w, "unavailable", http.StatusServiceUnavailable)
+	}))
+	defer issuer.Close()
+	v := NewOIDCVerifier(nil).(*oidcVerifier)
+	for range 3 {
+		if _, err := v.provider(context.Background(), issuer.URL); err == nil {
+			t.Fatal("expected discovery error")
+		}
+	}
+	if calls.Load() != 1 {
+		t.Fatalf("failed discovery retried %d times", calls.Load())
+	}
+	v.mu.Lock()
+	v.providers[issuer.URL].retryAfter = time.Now().Add(-time.Second)
+	v.mu.Unlock()
+	if _, err := v.provider(context.Background(), issuer.URL); err == nil {
+		t.Fatal("expected discovery error")
+	}
+	if calls.Load() != 2 {
+		t.Fatalf("discovery not retried after backoff: %d calls", calls.Load())
 	}
 }
