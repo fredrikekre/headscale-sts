@@ -24,3 +24,36 @@ jobs:
 
       - name: go test
         run: go test ./...
+
+  # End-to-end test against a local headscale, authenticated with this very
+  # job's OIDC token: mints a preauth key through headscale-sts and registers
+  # a tailscale node with it. See integration/run.sh.
+  integration:
+    runs-on: ubuntu-latest
+    # OIDC tokens are not issued to pull requests from forks
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    timeout-minutes: 10
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      HEADSCALE_VERSION: "0.29.3"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Install headscale and tailscale
+        run: |
+          curl -fsSL -o /tmp/headscale \
+            "https://github.com/juanfont/headscale/releases/download/v${HEADSCALE_VERSION}/headscale_${HEADSCALE_VERSION}_linux_amd64"
+          sudo install -m 755 /tmp/headscale /usr/local/bin/headscale
+          curl -fsSL https://tailscale.com/install.sh | sh
+
+      - name: Build
+        run: go build -o headscale-sts .
+
+      - name: Run integration test
+        run: REPOSITORY="$GITHUB_REPOSITORY" ./integration/run.sh

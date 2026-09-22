@@ -165,3 +165,25 @@ git tag v0.1.0 && git push origin v0.1.0
 
 Tests run fully offline; OIDC verification is tested against a fake issuer
 served from `httptest`.
+
+## Integration test
+
+CI also runs [integration/run.sh](integration/run.sh): it brings up a local
+headscale and headscale-sts, exchanges the CI job's own GitHub OIDC token
+for a preauth key, registers a tailscale node (userspace networking) with
+the minted key, and verifies that the node is registered and tagged in
+headscale — the exact production flow with no mocks. To run it outside
+GitHub Actions, mint a token with the bundled fake issuer:
+
+```sh
+go build -o headscale-sts .
+go run ./integration/fakeissuer -audience https://headscale-sts.invalid/sts \
+    -claims '{"repository":"my/repo"}' -token-file /tmp/token &
+ISSUER=http://127.0.0.1:19999 OIDC_TOKEN=$(cat /tmp/token) \
+    OIDC_TOKEN_WRONG_AUDIENCE=$(cat /tmp/token.wrongaud) \
+    REPOSITORY=my/repo ./integration/run.sh
+```
+
+(Requires `headscale`, `tailscale`, and `tailscaled` on `PATH` or pointed to
+with the corresponding environment variables; `tailscaled` is started with
+sudo.)
