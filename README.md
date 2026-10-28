@@ -41,9 +41,20 @@ Authorization: Bearer <oidc-token>
 Responses:
 
 - `200` with the preauth key as a `text/plain` body
-- `401` if the token is missing or fails verification
+- `401` if the token is missing, fails verification, or is rejected as a
+  replay (see below)
 - `403` if the token is valid but no rule matches its claims
-- `502` if headscale refuses to mint the key
+- `502` if the headscale key request fails
+
+Each token mints at most one key: its `jti` is remembered until the token
+expires, and a second request with the same token is rejected. Tokens must
+therefore carry `jti`, `iat` and `exp` claims (GitHub Actions tokens do). The
+set of used tokens is kept in memory, so tokens issued before the service
+started are rejected too. Since issue times have whole-second precision,
+request a token after the service has been running for at least a second.
+A token that hits a 403 is not used up and can be retried. Once minting is
+attempted, the token is consumed even on a 502: headscale may have created
+the key before the response was lost. Request a fresh token after a 502.
 
 `GET /sts/healthz` (also `/healthz`) returns `200 ok`.
 
@@ -173,14 +184,13 @@ headscale and headscale-sts, exchanges the CI job's own GitHub OIDC token
 for a preauth key, registers a tailscale node (userspace networking) with
 the minted key, and verifies that the node is registered and tagged in
 headscale — the exact production flow with no mocks. To run it outside
-GitHub Actions, mint a token with the bundled fake issuer:
+GitHub Actions, get tokens from the bundled fake issuer:
 
 ```sh
 go build -o headscale-sts .
-go run ./integration/fakeissuer -audience https://headscale-sts.invalid/sts \
-    -claims '{"repository":"my/repo"}' -token-file /tmp/token &
-ISSUER=http://127.0.0.1:19999 OIDC_TOKEN=$(cat /tmp/token) \
-    OIDC_TOKEN_WRONG_AUDIENCE=$(cat /tmp/token.wrongaud) \
+go run ./integration/fakeissuer -claims '{"repository":"my/repo"}' &
+ISSUER=http://127.0.0.1:19999 \
+    ACTIONS_ID_TOKEN_REQUEST_URL=http://127.0.0.1:19999/token \
     REPOSITORY=my/repo ./integration/run.sh
 ```
 
