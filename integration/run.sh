@@ -6,11 +6,11 @@
 #
 # Required environment:
 #   REPOSITORY  expected value of the token's repository claim
-# and a token source, one of:
-#   - GitHub Actions OIDC (ACTIONS_ID_TOKEN_REQUEST_URL/_TOKEN, set by the
-#     runner when the job has `id-token: write`)
-#   - OIDC_TOKEN (a pre-minted token, e.g. from integration/fakeissuer, for
-#     running outside GitHub Actions; optionally OIDC_TOKEN_WRONG_AUDIENCE)
+# and a GitHub Actions style token endpoint (ACTIONS_ID_TOKEN_REQUEST_URL and
+# ACTIONS_ID_TOKEN_REQUEST_TOKEN, set by the runner when the job has
+# `id-token: write`; outside GitHub Actions, point them at
+# integration/fakeissuer). Tokens are requested after headscale-sts has
+# started since it rejects tokens issued earlier.
 #
 # Optional environment:
 #   ISSUER     token issuer (default: the GitHub Actions issuer)
@@ -137,26 +137,27 @@ expect_status 405 GET "$STS_URL/sts/authkey"
 expect_status 401 POST "$STS_URL/sts/authkey"
 expect_status 401 POST "$STS_URL/sts/authkey" -H "Authorization: Bearer garbage"
 
+# Token issue times have whole-second precision; leave the startup second.
+sleep 1
 say "obtaining OIDC token"
-if [[ -n "${OIDC_TOKEN:-}" ]]; then
-    TOKEN=$OIDC_TOKEN
-else
-    : "${ACTIONS_ID_TOKEN_REQUEST_URL:?OIDC_TOKEN not set and not running in GitHub Actions}"
-    TOKEN=$(curl -sf -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-        -G --data-urlencode "audience=$AUDIENCE" "$ACTIONS_ID_TOKEN_REQUEST_URL" | jq -r .value)
-    OIDC_TOKEN_WRONG_AUDIENCE=$(curl -sf -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-        -G --data-urlencode "audience=$AUDIENCE-wrong" "$ACTIONS_ID_TOKEN_REQUEST_URL" | jq -r .value)
-fi
+: "${ACTIONS_ID_TOKEN_REQUEST_URL:?not running in GitHub Actions; see integration/fakeissuer}"
+oidc_token() {
+    curl -sf -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" \
+        -G --data-urlencode "audience=$1" "$ACTIONS_ID_TOKEN_REQUEST_URL" | jq -r .value
+}
+TOKEN=$(oidc_token "$AUDIENCE")
+TOKEN_WRONG_AUDIENCE=$(oidc_token "$AUDIENCE-wrong")
 [[ -n "$TOKEN" && "$TOKEN" != "null" ]] || fail "could not obtain an OIDC token"
 
-if [[ -n "${OIDC_TOKEN_WRONG_AUDIENCE:-}" ]]; then
-    say "a token with the wrong audience is rejected"
-    expect_status 401 POST "$STS_URL/sts/authkey" -H "Authorization: Bearer $OIDC_TOKEN_WRONG_AUDIENCE"
-fi
+say "a token with the wrong audience is rejected"
+expect_status 401 POST "$STS_URL/sts/authkey" -H "Authorization: Bearer $TOKEN_WRONG_AUDIENCE"
 
 say "minting a preauth key"
 KEY=$(curl -sfS -X POST "$STS_URL/sts/authkey" -H "Authorization: Bearer $TOKEN")
 [[ -n "$KEY" ]] || fail "empty preauth key"
+
+say "the token cannot be used again"
+expect_status 401 POST "$STS_URL/sts/authkey" -H "Authorization: Bearer $TOKEN"
 
 say "registering a node with the minted key"
 mkdir -p "$DIR/ts-state"

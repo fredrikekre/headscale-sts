@@ -53,14 +53,15 @@ func newFakeIssuer(t *testing.T) *fakeIssuer {
 	return f
 }
 
-// sign creates a signed token with the given claims, filling in iss/exp/iat
-// unless already present.
+// sign creates a signed token with the given claims, filling in
+// iss/exp/iat/jti unless already present.
 func (f *fakeIssuer) sign(t *testing.T, claims map[string]any) string {
 	t.Helper()
 	full := map[string]any{
 		"iss": f.server.URL,
-		"iat": time.Now().Add(-time.Minute).Unix(),
+		"iat": time.Now().Unix(),
 		"exp": time.Now().Add(time.Hour).Unix(),
+		"jti": rand.Text(),
 	}
 	for k, v := range claims {
 		full[k] = v
