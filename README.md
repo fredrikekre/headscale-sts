@@ -117,7 +117,7 @@ The [Makefile](Makefile) deploys everything (privileged commands run with
 sudo unless make is invoked as root):
 
 ```sh
-make install VERSION=v0.1.1
+make install VERSION=v0.2.0
 ```
 
 which, via individual file targets:
@@ -171,7 +171,7 @@ the version, see `headscale-sts -version`) and publishes them with a
 SHA256SUMS file as a GitHub release:
 
 ```sh
-git tag v0.1.1 && git push origin v0.1.1
+git tag v0.2.0 && git push origin v0.2.0
 ```
 
 Tests run fully offline; OIDC verification is tested against a fake issuer
