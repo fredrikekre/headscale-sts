@@ -8,7 +8,7 @@
 # when the file is missing, so `make install` never rotates the key; to
 # rotate it: sudo rm /etc/headscale-sts/apikey && make install restart.
 
-VERSION           ?= v0.1.0
+VERSION           ?= v0.1.1
 ARCH              ?= $(shell uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')
 APIKEY_EXPIRATION ?= 3650d
 
